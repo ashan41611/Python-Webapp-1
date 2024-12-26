@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk17'
+    }
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/ashan41611/Python-Webapp-1.git'
+            }
+        }
+        
+        stage('OWASP FS SCAN') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./', odcInstallation: 'DC'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        
+        stage('TRIVY FS SCAN') {
+            steps {
+                sh 'trivy fs .'
+            }
+        }
+        
+        stage('Docker Build & Tag') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh "make image"
+                    }
+                }
+            }
+        }
+        
+         stage('Trivy Image Scan') {
+            steps {
+                sh "trivy image adijaiswal/python-webapp:latest"
+            }
+        }
+        
+        stage('Docker Push Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh "make push"
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Docker Container') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh "docker run -d -p 5000:5000 alirathore412/python-webapp:latest" 
+                    }
+                }
+            }
+        }
+    }
+}
